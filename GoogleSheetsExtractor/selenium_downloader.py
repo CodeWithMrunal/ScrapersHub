@@ -48,6 +48,124 @@ class SimpleSharePointDownloader:
             print("Make sure you have Chrome and ChromeDriver installed")
             raise
     
+    def handle_authentication(self):
+        """Handle SharePoint authentication if needed"""
+        try:
+            # Check if we're on a login page
+            login_indicators = [
+                "Sign in",
+                "Enter your password", 
+                "Stay signed in",
+                "Microsoft",
+                "office.com",
+                "login.microsoftonline.com"
+            ]
+            
+            page_text = self.driver.page_source.lower()
+            current_url = self.driver.current_url.lower()
+            
+            for indicator in login_indicators:
+                if indicator.lower() in page_text or indicator.lower() in current_url:
+                    print(f"🔐 Authentication required - detected: {indicator}")
+                    print(f"Current URL: {self.driver.current_url}")
+                    print("Please complete authentication manually in the browser...")
+                    
+                    # Wait for user to complete authentication
+                    input("Press Enter after you've signed in and can see the video...")
+                    return True
+            
+            return False
+            
+        except Exception as e:
+            print(f"Error checking authentication: {e}")
+            return False
+    
+    def maintain_session(self):
+        """Maintain SharePoint session between downloads"""
+        try:
+            # Ensure browser stays focused
+            self.ensure_browser_focus()
+            
+            # Simulate user activity
+            self.simulate_user_activity()
+            
+            # Keep the same browser tab open
+            # Don't navigate away completely
+            time.sleep(2)
+            
+            # Clear any popups or overlays that might interfere
+            try:
+                # Close any notification bars
+                close_buttons = self.driver.find_elements(By.CSS_SELECTOR, "button[aria-label*='Close'], button[aria-label*='Dismiss']")
+                for btn in close_buttons:
+                    try:
+                        btn.click()
+                    except:
+                        pass
+            except:
+                pass
+                
+        except Exception as e:
+            print(f"Session maintenance error: {e}")
+
+    def ensure_browser_focus(self):
+        """Ensure browser window is focused and active"""
+        try:
+            # Bring browser window to front
+            self.driver.maximize_window()
+            
+            # Switch to the current window (ensures focus)
+            self.driver.switch_to.window(self.driver.current_window_handle)
+            
+            # Click somewhere on the page to ensure it's active
+            try:
+                body = self.driver.find_element(By.TAG_NAME, "body")
+                self.driver.execute_script("arguments[0].click();", body)
+            except:
+                pass
+                
+            # Small delay to ensure focus is established
+            time.sleep(1)
+            
+            print("✅ Browser window focused")
+            
+        except Exception as e:
+            print(f"Error focusing browser: {e}")
+
+    def simulate_user_activity(self):
+        """Simulate user activity to keep SharePoint active"""
+        try:
+            # Execute JavaScript to simulate user presence
+            self.driver.execute_script("""
+                // Simulate mouse movement
+                var event = new MouseEvent('mousemove', {
+                    view: window,
+                    bubbles: true,
+                    cancelable: true,
+                    clientX: 100,
+                    clientY: 100
+                });
+                document.dispatchEvent(event);
+                
+                // Simulate page visibility
+                Object.defineProperty(document, 'hidden', {
+                    value: false,
+                    writable: true
+                });
+                
+                // Trigger focus event
+                window.focus();
+                
+                // Simulate scroll to activate page
+                window.scrollTo(0, 100);
+                window.scrollTo(0, 0);
+            """)
+            
+            print("✅ Simulated user activity")
+            
+        except Exception as e:
+            print(f"Error simulating activity: {e}")
+
     def download_video(self, url, row_number=None):
         """Download a single video from SharePoint URL"""
         try:
@@ -56,28 +174,92 @@ class SimpleSharePointDownloader:
             # Navigate to the URL
             self.driver.get(url)
             print("Page loaded, waiting for content...")
-            
+
             # Wait for page to load
             WebDriverWait(self.driver, 30).until(
                 EC.presence_of_element_located((By.TAG_NAME, "body"))
             )
+
+            # Ensure browser is focused and active
+            self.ensure_browser_focus()
             
             # Wait additional time for SharePoint to fully load
-            time.sleep(8)
-            
-            # Wait for SharePoint video player to load
-            try:
-                WebDriverWait(self.driver, 20).until(
-                    EC.any_of(
-                        EC.presence_of_element_located((By.CSS_SELECTOR, "[data-automationid='downloadButton']")),
-                        EC.presence_of_element_located((By.CSS_SELECTOR, "button[aria-label*='Download']")),
-                        EC.presence_of_element_located((By.CSS_SELECTOR, ".ms-Button[aria-label*='Download']"))
-                    )
-                )
-                print("✅ SharePoint interface loaded")
-            except TimeoutException:
-                print("⚠️ SharePoint interface taking longer to load, continuing anyway...")
+            time.sleep(5)
 
+            # Check if authentication is needed
+            # if self.handle_authentication():
+            #     # Wait a bit more after authentication
+            #     time.sleep(5)
+
+            # Wait for the actual video player interface to load
+            # Wait for the actual video player interface to load
+            print("⏳ Waiting for video player to load...")
+            video_player_loaded = False
+
+            # Simulate user activity to keep SharePoint active
+            self.simulate_user_activity()
+
+            # Multiple attempts to load video player
+            for attempt in range(3):
+                try:
+                    print(f"Attempt {attempt + 1} to load video player...")
+                    
+                    # Ensure browser focus before each attempt
+                    self.ensure_browser_focus()
+                    
+                    # Wait for video-specific elements to appear
+                    WebDriverWait(self.driver, 15).until(
+                        EC.any_of(
+                            # Video player elements
+                            EC.presence_of_element_located((By.CSS_SELECTOR, "video")),
+                            EC.presence_of_element_located((By.CSS_SELECTOR, "[data-automationid='downloadButton']")),
+                            EC.presence_of_element_located((By.CSS_SELECTOR, "button[aria-label*='Download']")),
+                            EC.presence_of_element_located((By.CSS_SELECTOR, ".ms-Button[aria-label*='Download']")),
+                            # SharePoint video player containers
+                            EC.presence_of_element_located((By.CSS_SELECTOR, "[data-automationid='videoPlayer']")),
+                            EC.presence_of_element_located((By.CSS_SELECTOR, ".od-VideoPlayer")),
+                            EC.presence_of_element_located((By.CSS_SELECTOR, "[class*='videoPlayer']")),
+                            EC.presence_of_element_located((By.CSS_SELECTOR, "[class*='VideoPlayer']"))
+                        )
+                    )
+                    print("✅ Video player interface loaded")
+                    video_player_loaded = True
+                    break
+                    
+                except TimeoutException:
+                    print(f"⚠️ Video player not loaded on attempt {attempt + 1}")
+                    if attempt < 2:  # Don't refresh on last attempt
+                        print("Refreshing page and trying again...")
+                        self.driver.refresh()
+                        time.sleep(5)
+                    else:
+                        print("⚠️ Video player not detected after all attempts")
+                        # Debug: Check what's actually on the page
+                        page_title = self.driver.title
+                        current_url = self.driver.current_url
+                        print(f"Page title: {page_title}")
+                        print(f"Current URL: {current_url}")
+                        
+                        # Check if it's an error page or redirect
+                        if "error" in page_title.lower() or "not found" in page_title.lower():
+                            print("❌ Error page detected")
+                            return False
+                        elif "sign in" in page_title.lower() or "login" in current_url:
+                            print("🔐 Authentication required")
+                            if self.handle_authentication():
+                                time.sleep(5)
+                                video_player_loaded = True
+                            else:
+                                return False
+
+            # Additional wait for video content to fully load
+            if video_player_loaded:
+                time.sleep(3)
+            else:
+                # Last attempt - wait a bit more and check for any SharePoint content
+                print("⏳ Giving SharePoint more time to load...")
+                time.sleep(10)
+            
             # Try multiple selectors for the download button
             download_selectors = [
                 # Most specific SharePoint selectors first
@@ -129,6 +311,16 @@ class SimpleSharePointDownloader:
                         btn_text = button.get_attribute("aria-label") or button.text or button.get_attribute("title") or "No text"
                         btn_class = button.get_attribute("class") or "No class"
                         print(f"  Button {i+1}: '{btn_text}' (class: {btn_class[:50]})")
+                        
+                    # Also check for any elements with "download" in them
+                    print("\n🔍 Searching for any elements containing 'download':")
+                    download_elements = self.driver.find_elements(By.XPATH, "//*[contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'download') or contains(translate(@aria-label, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'download')]")
+                    print(f"Found {len(download_elements)} elements with 'download':")
+                    for i, elem in enumerate(download_elements[:5]):
+                        elem_text = elem.text or elem.get_attribute("aria-label") or elem.get_attribute("title") or "No text"
+                        elem_tag = elem.tag_name
+                        print(f"  Element {i+1}: <{elem_tag}> '{elem_text}'")
+
                 except Exception as e:
                     print(f"Error listing buttons: {e}")
                 
@@ -169,7 +361,24 @@ class SimpleSharePointDownloader:
                     
                     if not download_button:
                         print("❌ Still could not find download button after refresh")
-                        return False
+                        
+                        # Offer manual intervention
+                        print("\n🔧 Manual intervention option:")
+                        print("The browser window is still open. You can:")
+                        print("1. Manually navigate to the video")
+                        print("2. Click download manually") 
+                        print("3. Press Enter here when download starts")
+                        
+                        try:
+                            user_input = input("Press Enter if you manually started the download, or 'skip' to skip this video: ").strip().lower()
+                            if user_input == 'skip':
+                                return False
+                            else:
+                                print("✅ Manual download initiated")
+                                time.sleep(3)
+                                return True
+                        except KeyboardInterrupt:
+                            return False
             
             # Click the download button
             try:
@@ -188,9 +397,11 @@ class SimpleSharePointDownloader:
             # Handle potential dialog boxes
             self.handle_download_dialogs()
             
-            # Wait for download to start
+            # Wait for download to start (reduced time since you said it downloads quickly)
             print("⏳ Waiting for download to start...")
-            time.sleep(3)
+            # time.sleep(3)
+
+            # Check if download actually started by looking for download indicators
             try:
                 # Sometimes SharePoint shows a progress indicator
                 WebDriverWait(self.driver, 5).until(
@@ -203,6 +414,7 @@ class SimpleSharePointDownloader:
                 print("✅ Download progress detected")
             except TimeoutException:
                 print("ℹ️ No download progress indicator found (download may have completed quickly)")
+            
             return True
             
         except Exception as e:
@@ -322,6 +534,27 @@ class SimpleSharePointDownloader:
         except Exception as e:
             print(f"ℹ️ No dialogs appeared or error handling dialogs: {e}")
     
+    def test_multiple_links(self, links_data):
+        """Test if the issue is with multiple links"""
+        print("🧪 Testing first 3 links with longer delays...")
+        
+        for i, link_info in enumerate(links_data[:3]):
+            url = link_info.get('link', '')
+            row = link_info.get('row', 'Unknown')
+            
+            print(f"\n🔗 Testing link {i+1}: Row {row}")
+            success = self.download_video(url, row)
+            
+            if success:
+                print("✅ Success!")
+            else:
+                print("❌ Failed!")
+                
+            # Long delay between tests
+            if i < 2:
+                print("⏳ Waiting 30 seconds before next test...")
+                time.sleep(30)
+    
     def download_from_file(self, filename="sharepoint_links.json"):
         """Download all videos from a JSON file containing links"""
         try:
@@ -347,10 +580,13 @@ class SimpleSharePointDownloader:
                     failed_downloads += 1
                     print(f"❌ Failed to process link from row {row}")
                 
-                # Wait between downloads to be respectful
+                # Maintain session between downloads
+                self.maintain_session()
+                
+                # Wait between downloads (increased time to avoid rate limiting)
                 if i < len(links_data):
-                    print("⏳ Waiting 5 seconds before next download...")
-                    time.sleep(5)
+                    print("⏳ Waiting 15 seconds before next download...")
+                    time.sleep(15)
             
             print(f"\n{'='*60}")
             print(f"📊 SUMMARY:")
@@ -388,10 +624,13 @@ class SimpleSharePointDownloader:
                     failed_downloads += 1
                     print(f"❌ Failed to process URL {i}")
                 
-                # Wait between downloads
+                # Maintain session between downloads
+                self.maintain_session()
+                
+                # Wait between downloads (increased time to avoid rate limiting)
                 if i < len(urls):
-                    print("⏳ Waiting 5 seconds before next download...")
-                    time.sleep(5)
+                    print("⏳ Waiting 15 seconds before next download...")
+                    time.sleep(15)
             
             print(f"\n{'='*60}")
             print(f"📊 SUMMARY:")
@@ -417,7 +656,7 @@ def main():
     # Create downloader instance
     downloader = SimpleSharePointDownloader(
         download_folder="downloads",
-        headless=True  # Set to True to run without showing browser
+        headless=False  # Set to True to run without showing browser
     )
     
     try:
