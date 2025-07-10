@@ -1,3 +1,8 @@
 TransferFlow_Videos
 SharePoint_Videos
 .venv
+service-account-key.json
+downloads
+sharepoint_links.json
+sharepoint_urls.txt
+.env
