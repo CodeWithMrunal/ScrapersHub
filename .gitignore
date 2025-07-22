@@ -3,6 +3,10 @@ SharePoint_Videos
 .venv
 service-account-key.json
 downloads
+Downloads
 sharepoint_links.json
 sharepoint_urls.txt
 .env
+transfer_links.json
+transfer_urls.txt
+WeTransfer_Downloads
